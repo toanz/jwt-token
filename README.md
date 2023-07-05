@@ -14,15 +14,16 @@ command:
 Activate plugin in your config  
 
 ```yaml
-http:
-  middlewares:
-    my-jwt-middleware:
-      plugin:
-        jwt-middleware:
-          secret: SECRET
-          proxyHeaderName: injectedPayload
-          authHeader: Authorization
-          headerPrefix: Bearer
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+meta:
+spec:
+  plugin:
+    jwt-middleware:
+      secret: SECRET
+      proxyHeaderName: injectedPayload
+      authHeader: Authorization
+      headerPrefix: Bearer
 ```
 
 Use as docker-compose label  
