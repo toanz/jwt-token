@@ -7,8 +7,8 @@ JWT Middleware is a middleware plugin for [Traefik](https://github.com/containou
 Start with command
 ```yaml
 command:
-  - "--experimental.plugins.jwt-middleware.modulename=github.com/toanz/jwt-middleware"
-  - "--experimental.plugins.jwt-middleware.version=v0.1.2"
+  - "--experimental.plugins.jwt-token.modulename=github.com/toanz/jwt-token"
+  - "--experimental.plugins.jwt-token.version=v0.1.2"
 ```
 
 Activate plugin in your config  
@@ -19,7 +19,7 @@ kind: Middleware
 meta:
 spec:
   plugin:
-    jwt-middleware:
+    jwt-token:
       secret: SECRET
       proxyHeaderName: injectedPayload
       authHeader: Authorization
@@ -29,5 +29,5 @@ spec:
 Use as docker-compose label  
 ```yaml
   labels:
-        - "traefik.http.routers.my-service.middlewares=my-jwt-middleware@file"
+        - "traefik.http.routers.my-service.middlewares=my-jwt-token@file"
 ```
