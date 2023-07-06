@@ -1,4 +1,4 @@
-displayName: JWT Middleware
+displayName: JWT Token
 type: middleware
 import: github.com/toanz/jwt-token
 summary: 'Verify JWT Token in auth header and injects decoded payload in header'
