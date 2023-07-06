@@ -3,33 +3,36 @@ package jwt_middleware
 import (
 	"context"
 	"fmt"
-	"strings"
 	"net/http"
+	"strings"
 
-	"encoding/base64"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
+	"strconv"
+	"time"
 )
 
 type Config struct {
-	Secret string `json:"secret,omitempty"`
+	Secret          string `json:"secret,omitempty"`
 	ProxyHeaderName string `json:"proxyHeaderName,omitempty"`
-	AuthHeader string `json:"authHeader,omitempty"`
-	HeaderPrefix string `json:"headerPrefix,omitempty"`
+	AuthHeader      string `json:"authHeader,omitempty"`
+	HeaderPrefix    string `json:"headerPrefix,omitempty"`
+	ExpireMode      string `json:"expireMode,omitempty"`
 }
-
 
 func CreateConfig() *Config {
 	return &Config{}
 }
 
 type JWT struct {
-	next						http.Handler
-	name						string
-	secret					string
+	next            http.Handler
+	name            string
+	secret          string
 	proxyHeaderName string
-	authHeader 			string
-	headerPrefix		string
+	authHeader      string
+	headerPrefix    string
+	expireMode      string
 }
 
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
@@ -38,7 +41,7 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		config.Secret = "SECRET"
 	}
 	if len(config.ProxyHeaderName) == 0 {
-		config.ProxyHeaderName = "injectedPayload"
+		config.ProxyHeaderName = "ipayload"
 	}
 	if len(config.AuthHeader) == 0 {
 		config.AuthHeader = "Authorization"
@@ -47,13 +50,18 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		config.HeaderPrefix = "Bearer"
 	}
 
+	if len(config.ExpireMode) == 0 {
+		config.ExpireMode = "none"
+	}
+
 	return &JWT{
-		next:		next,
-		name:		name,
-		secret:	config.Secret,
+		next:            next,
+		name:            name,
+		secret:          config.Secret,
 		proxyHeaderName: config.ProxyHeaderName,
-		authHeader: config.AuthHeader,
-		headerPrefix: config.HeaderPrefix,
+		authHeader:      config.AuthHeader,
+		headerPrefix:    config.HeaderPrefix,
+		expireMode:      config.ExpireMode,
 	}, nil
 }
 
@@ -64,29 +72,47 @@ func (j *JWT) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 		http.Error(res, "Request error", http.StatusUnauthorized)
 		return
 	}
-	
-	token, preprocessError  := preprocessJWT(headerToken, j.headerPrefix)
+
+	token, preprocessError := preprocessJWT(headerToken, j.headerPrefix)
 	if preprocessError != nil {
 		http.Error(res, "Request error", http.StatusBadRequest)
 		return
 	}
-	
+
 	verified, verificationError := verifyJWT(token, j.secret)
 	if verificationError != nil {
 		http.Error(res, "Not allowed", http.StatusUnauthorized)
 		return
 	}
 
-	if (verified) {
+	if verified {
 		// If true decode payload
 		payload, decodeErr := decodeBase64(token.payload)
 		if decodeErr != nil {
-			http.Error(res, "Request error", http.StatusBadRequest)
+			http.Error(res, "payload invalid", http.StatusBadRequest)
 			return
 		}
 
+		if j.expireMode == "header" {
+
+			expireS, decodeErr := decodeBase64(token.header)
+
+			timestampInt, err := strconv.Atoi(expireS)
+
+			if decodeErr != nil || err != nil {
+				http.Error(res, "header error", http.StatusBadRequest)
+				return
+			}
+
+			// Compare timestamps
+			if int(time.Now().Unix()) > timestampInt {
+				http.Error(res, "expired", http.StatusBadRequest)
+				return
+			}
+		}
+
 		// TODO Check for outside of ASCII range characters
-		
+
 		// Inject header as proxypayload or configured name
 		req.Header.Add(j.proxyHeaderName, payload)
 		fmt.Println(req.Header)
@@ -98,8 +124,8 @@ func (j *JWT) ServeHTTP(res http.ResponseWriter, req *http.Request) {
 
 // Token Deconstructed header token
 type Token struct {
-	header string
-	payload string
+	header       string
+	payload      string
 	verification string
 }
 
@@ -109,7 +135,7 @@ func verifyJWT(token Token, secret string) (bool, error) {
 	message := token.header + "." + token.payload
 	mac.Write([]byte(message))
 	expectedMAC := mac.Sum(nil)
-	
+
 	decodedVerification, errDecode := base64.RawURLEncoding.DecodeString(token.verification)
 	if errDecode != nil {
 		return false, errDecode
@@ -153,5 +179,3 @@ func decodeBase64(baseString string) (string, error) {
 	}
 	return string(byte), nil
 }
-
-
