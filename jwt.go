@@ -19,10 +19,13 @@ type Config struct {
 	AuthHeader      string `json:"authHeader,omitempty"`
 	HeaderPrefix    string `json:"headerPrefix,omitempty"`
 	ExpireMode      string `json:"expireMode,omitempty"`
+	IgnoreOptions 	bool `json:"ignoreOptions,omitempty"`
 }
 
 func CreateConfig() *Config {
-	return &Config{}
+	return &Config{
+	  IgnoreOptions: true, // Default value set here
+	}
 }
 
 type JWT struct {
@@ -33,6 +36,7 @@ type JWT struct {
 	authHeader      string
 	headerPrefix    string
 	expireMode      string
+	ignoreOptions 	bool
 }
 
 func New(ctx context.Context, next http.Handler, config *Config, name string) (http.Handler, error) {
@@ -62,10 +66,17 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		authHeader:      config.AuthHeader,
 		headerPrefix:    config.HeaderPrefix,
 		expireMode:      config.ExpireMode,
+		ignoreOptions: 	 config.IgnoreOptions, // Assign the config value (allowing override)
 	}, nil
 }
 
 func (j *JWT) ServeHTTP(res http.ResponseWriter, req *http.Request) {
+
+	if j.ignoreOptions && req.Method == http.MethodOptions {
+		j.next.ServeHTTP(res, req)
+		return
+	}
+	
 	headerToken := req.Header.Get(j.authHeader)
 
 	if len(headerToken) == 0 {
